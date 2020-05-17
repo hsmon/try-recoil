@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState, useCallback} from 'react';
 import {
   RecoilRoot,
   atom,
@@ -6,190 +6,73 @@ import {
   useRecoilState,
   useRecoilValue,
   useSetRecoilState,
+  useRecoilCallback,
 } from "recoil";
 
 function App() {
   return (
     <RecoilRoot>
-      <TodoList />
+      <CounterButton />
+      <AlertButton />
+      <RoughButton />
     </RecoilRoot>
   )
 }
 
-const todoListState = atom({
-  key:'todoListState',
-  default: []
+const counterState = atom({
+  key: "counterState",
+  default: 0
 })
 
-function TodoList() {
-  const todoList = useRecoilValue(todoListState)
-
+const CounterButton = () => {
+  const [count, setCount] = useRecoilState(counterState)
   return (
-    <>
-      <TodoListStats />
-      <TodoListFilters />
-      <TodoItemCreator />
-      {todoList.map(todoItem => (
-        <TodoItem item={todoItem} />
-      ))}
-    </>
+    <p>
+      <button onClick={() => setCount(c => c + 1)}>{count}</button>
+    </p>
   )
 }
 
-function TodoItemCreator() {
-  const [inputValue, setInputValue] = React.useState('')
-  const setTodoList = useSetRecoilState(todoListState)
+const AlertButton = () => {
+  const showAlert = useRecoilCallback(async ({getPromise}) => {
+    const counter = await getPromise(counterState)
 
-  const addItem = () => {
-    setTodoList( oldTodoList => [
-      ...oldTodoList,
-      {
-        id: getId(),
-        text: inputValue,
-        isComplete: false,
-      }
-    ])
-  }
-
-  const onChange = ({target: {value}}) => {
-    setInputValue(value)
-  }
+    console.log(counter)
+  },[])
 
   return (
-    <div>
-      <input type="text" value={inputValue} onChange={onChange} />
-      <button onClick={addItem}>Add</button>
-    </div>
+    <p>
+      <button onClick={showAlert}>Show Counter State</button>
+    </p>
   )
 }
 
-let id = 0
-function getId() {
-  return id++
-}
-
-function TodoItem({item}) {
-  const [todoList, setTodoList] = useRecoilState(todoListState)
-  const index = todoList.findIndex(listItem => listItem === item)
-
-  const editItemText = ({target:{value}}) => {
-    const newList = replaceItemAtIndex(todoList, index, {
-      ...item,
-      text: value,
-    })
-
-    setTodoList(newList)
-  }
-
-  const toggleItemCompletion = () => {
-    const newList = replaceItemAtIndex(todoList, index, {
-      ...item,
-      isComplete: !item.isComplete,
-    })
-
-    setTodoList(newList)
-  }
-
-  const deleteItem = () => {
-    const newList = removeItemAtIndex(todoList, index)
-
-    setTodoList(newList)
-  }
-
-  return (
-    <div>
-      <input type="text" value={item.text} onChange={editItemText}/>
-      <input type="checkbox" checked={item.isComplete} onChange={toggleItemCompletion}/>
-      <button onClick={deleteItem}>X</button>
-    </div>
-  )
-}
-
-function replaceItemAtIndex(array, index, newValue) {
-  return [...array.slice(0, index), newValue, ...array.slice(index + 1)]
-}
-
-function removeItemAtIndex(array, index) {
-  return [...array.slice(0, index), ...array.slice(index + 1)]
-}
-
-const todoListFilterState = atom({
-  key: "todoListFilterState",
-  default: "Show All",
+const roughCounterState = selector({
+  key: "roughCounterState",
+  // getはそのSelectorの値を計算する関数
+  get: ({ get }) => Math.floor(get(counterState) / 10), // useRecoilValue(roughValue)
+  set: ({ set }, newValue) =>{
+    console.log(newValue)
+    return set(counterState, newValue * 10);
+  }, // useSetRecoilState(setRoughValue)
 });
 
-const filteredTodoListState = selector({
-  key: "filteredTodoListState",
-  get: ({get}) => {
-    const filter = get(todoListFilterState)
-    const list = get(todoListState)
-
-    switch (filter) {
-      case "Show Completed":
-        return list.filter((item) => item.isComplete);
-      case "Show Uncompleted":
-        return list.filter((item) => !item.isComplete);
-      default:
-        return list
-    }
-  }
-});
-
-function TodoListFilters(){
-  const [filter, setFilter] = useRecoilState(todoListFilterState)
-  const updateFilter = ({target:{value}}) => {
-    setFilter(value)
-  }
-
+const RoughButton = () => {
+  // const roughValue = useRecoilValue(roughCounterState)
+  const [roughValue, setRoughValue] = useRecoilState(roughCounterState)
   return (
-    <>
-      Filter:
-      <select value={filter} onChange={updateFilter}>
-        <option value="Show All">All</option>
-        <option value="Show Completed">Completed</option>
-        <option value="Show Uncompleted">Uncompleted</option>
-      </select>
-    </>
+    <p>
+      <button onClick={() => setRoughValue((c) => c + 1)}>{roughValue}</button>
+    </p>
   );
 }
 
-const todoListStatsState = selector({
-  key: "todoListStatsState",
-  get: ({get}) => {
-    const todoList = get(filteredTodoListState)
-
-    const totalNum = todoList.length
-    const totalCompletedNum = todoList.filter(item => item.isComplete).length
-    const totalUncompletedNum = totalNum - totalCompletedNum
-    const percentCompleted = totalNum === 0 ? 0 : totalCompletedNum / totalNum
-
-    return {
-      totalNum,
-      totalCompletedNum,
-      totalUncompletedNum,
-      percentCompleted,
-    };
-  }
-});
-
-function TodoListStats() {
-  const {
-    totalNum,
-    totalCompletedNum,
-    totalUncompletedNum,
-    percentCompleted,
-  } = useRecoilValue(todoListStatsState)
-
-  const formattedPercentCompleted = Math.round(percentCompleted * 100)
-
-  return (
-    <ul>
-      <li>Total items: {totalNum}</li>
-      <li>Items completed: {totalCompletedNum}</li>
-      <li>Items not completed: {totalUncompletedNum}</li>
-      <li>Percent completed: {formattedPercentCompleted}</li>
-    </ul>
-  );
+export const useGlobalCounter = () => {
+  const [counter, setCounter] = useRecoilState(counterState)
+  const increment = useRecoilCallback(()=> {
+    setCounter(c => c + 1)
+  },[])
+  return [counter, increment]
 }
 
 export default App;
